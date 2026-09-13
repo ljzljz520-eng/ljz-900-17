@@ -1,6 +1,7 @@
 <?php
 declare(strict_types=1);
 namespace app\controller;
+use app\model\Record;
 use app\model\User;
 use think\facade\Log;
 use think\facade\Request;
@@ -27,8 +28,30 @@ class UserController
     public function index(): Response
     {
         try {
-            $list = User::where('role', 'employee')->select();
+            $list = User::where('role', 'employee')->order('id', 'asc')->select();
             $data = $list->isEmpty() ? [] : $list->toArray();
+            if (empty($data)) {
+                return api_json(['code' => 0, 'message' => 'ok', 'data' => $data]);
+            }
+            // 每名员工的检查数量（records 总数）与整改数量（已完成）
+            $userIds = array_column($data, 'id');
+            $stats = Record::field('user_id, COUNT(*) AS check_count, SUM(CASE WHEN status = \'completed\' THEN 1 ELSE 0 END) AS fix_count')
+                ->whereIn('user_id', $userIds)
+                ->group('user_id')
+                ->select()
+                ->toArray();
+            $statsMap = [];
+            foreach ($stats as $row) {
+                $statsMap[(int) $row['user_id']] = [
+                    'check_count' => (int) $row['check_count'],
+                    'fix_count' => (int) $row['fix_count'],
+                ];
+            }
+            foreach ($data as &$row) {
+                $row['check_count'] = $statsMap[(int) $row['id']]['check_count'] ?? 0;
+                $row['fix_count'] = $statsMap[(int) $row['id']]['fix_count'] ?? 0;
+            }
+            unset($row);
             return api_json(['code' => 0, 'message' => 'ok', 'data' => $data]);
         } catch (\Throwable $e) {
             Log::error('UserController@index: ' . $e->getMessage() . ' ' . $e->getTraceAsString());

@@ -184,6 +184,9 @@ class RecordController
             if (!$user) {
                 return api_json(['code' => 401, 'message' => '无效的 token', 'data' => null]);
             }
+            if (isset($user->is_active) && (int) $user->is_active !== 1) {
+                return api_json(['code' => 403, 'message' => '链接已停用，无法上传整改图', 'data' => null]);
+            }
             if ((int) $record->user_id !== (int) $user->id) {
                 return api_json(['code' => 403, 'message' => '无权操作该记录', 'data' => null]);
             }

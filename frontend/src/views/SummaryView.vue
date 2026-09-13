@@ -5,16 +5,37 @@
       <p class="page-desc">问题图与整改图成对展示，按 #key 从小到大排序，同一徽章（检查项+分值）共用</p>
     </header>
 
+    <section class="filter-bar">
+      <span class="filter-label">
+        <el-icon><Filter /></el-icon>
+        按员工筛选
+      </span>
+      <el-select
+        v-model="selectedUserId"
+        placeholder="全部员工"
+        class="filter-select"
+        @change="loadSummary"
+      >
+        <el-option label="全部员工" :value="0" />
+        <el-option
+          v-for="u in users"
+          :key="u.id"
+          :label="`${u.name}（检查 ${u.check_count ?? 0} / 整改 ${u.fix_count ?? 0}）`"
+          :value="u.id"
+        />
+      </el-select>
+    </section>
+
     <section v-loading="loading" class="summary-section">
-      <div v-if="summary.length === 0 && !loading" class="empty-state">
+      <div v-if="filteredSummary.length === 0 && !loading" class="empty-state">
         <div class="empty-icon">
           <el-icon><DataAnalysis /></el-icon>
         </div>
         <p class="empty-text">暂无汇总数据</p>
-        <p class="empty-hint">请在检查上传中创建记录</p>
+        <p class="empty-hint">{{ selectedUserId ? '该员工暂无检查记录' : '请在检查上传中创建记录' }}</p>
       </div>
 
-      <div v-for="item in summary" :key="item.user?.id" class="summary-card">
+      <div v-for="item in filteredSummary" :key="item.user?.id" class="summary-card">
         <div class="summary-header">
           <div class="summary-user">
             <div class="user-avatar">{{ (item.user?.name || '员')[0] }}</div>
@@ -80,12 +101,19 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
-import { CircleCheck, DataAnalysis } from '@element-plus/icons-vue'
+import { ref, computed, onMounted } from 'vue'
+import { CircleCheck, DataAnalysis, Filter } from '@element-plus/icons-vue'
 import { api, apiBase } from '@/api/request'
 
 const loading = ref(true)
 const summary = ref([])
+const users = ref([])
+const selectedUserId = ref(0)
+
+// 以服务端 user_id 筛选为准，同时保留前端兜底过滤
+const filteredSummary = computed(() =>
+  selectedUserId.value ? summary.value.filter((it) => it.user?.id === selectedUserId.value) : summary.value
+)
 
 function imageUrl(path) {
   if (!path) return ''
@@ -96,7 +124,8 @@ function imageUrl(path) {
 async function loadSummary() {
   loading.value = true
   try {
-    summary.value = await api.getSummary()
+    const params = selectedUserId.value ? { user_id: selectedUserId.value } : {}
+    summary.value = await api.getSummary(params)
   } catch (_) {
     summary.value = []
   } finally {
@@ -104,7 +133,17 @@ async function loadSummary() {
   }
 }
 
-onMounted(loadSummary)
+async function loadUsers() {
+  try {
+    users.value = await api.getUsers()
+  } catch (_) {
+    users.value = []
+  }
+}
+
+onMounted(async () => {
+  await Promise.all([loadSummary(), loadUsers()])
+})
 </script>
 
 <style scoped>
@@ -129,6 +168,32 @@ onMounted(loadSummary)
   font-size: 15px;
   color: #64748b;
   margin: 0;
+}
+
+.filter-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: white;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 12px 16px;
+  margin-bottom: 24px;
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.04);
+}
+
+.filter-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #334155;
+}
+
+.filter-select {
+  width: 320px;
+  max-width: 100%;
 }
 
 .summary-section {

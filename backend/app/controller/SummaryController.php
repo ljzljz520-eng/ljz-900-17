@@ -1,18 +1,23 @@
 <?php
 declare(strict_types=1);
 namespace app\controller;
-use app\model\Record;
 use app\model\User;
 use think\facade\Log;
+use think\facade\Request;
 use think\Response;
 class SummaryController
 {
     public function index(): Response
     {
         try {
-            $users = User::where('role', 'employee')->with(['records' => function ($q) {
+            $query = User::where('role', 'employee');
+            $userId = (int) Request::param('user_id', 0);
+            if ($userId > 0) {
+                $query->where('id', $userId);
+            }
+            $users = $query->with(['records' => function ($q) {
                 $q->with('item')->order('sequence_key', 'asc');
-            }])->select();
+            }])->order('id', 'asc')->select();
             $data = [];
             foreach ($users as $user) {
                 $records = $user->records;

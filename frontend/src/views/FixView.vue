@@ -30,7 +30,7 @@
       </header>
 
       <section v-loading="loading" class="fix-content">
-        <div v-if="token" class="fix-toolbar">
+        <div v-if="token && !blockMessage" class="fix-toolbar">
           <el-switch v-model="onlyPending" active-text="仅看待整改" inactive-text="显示全部" />
         </div>
 
@@ -40,6 +40,14 @@
           </div>
           <p class="fix-empty-text">缺少 token</p>
           <p class="fix-empty-hint">无法加载整改列表，请使用管理员提供的链接或扫码进入</p>
+        </div>
+
+        <div v-else-if="blockMessage" class="fix-empty">
+          <div class="fix-empty-icon">
+            <el-icon><CircleClose /></el-icon>
+          </div>
+          <p class="fix-empty-text">{{ blockMessage.title }}</p>
+          <p class="fix-empty-hint">{{ blockMessage.hint }}</p>
         </div>
 
         <div v-else-if="records.length === 0 && !loading" class="fix-empty">
@@ -111,7 +119,7 @@
 import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { CircleCheck, Loading, Link } from '@element-plus/icons-vue'
+import { CircleCheck, CircleClose, Loading, Link } from '@element-plus/icons-vue'
 import { api, apiBase } from '@/api/request'
 
 const route = useRoute()
@@ -119,6 +127,8 @@ const loading = ref(true)
 const uploadingId = ref(null)
 const records = ref([])
 const onlyPending = ref(false)
+// 链接不可用状态：403=已停用；401/404=token 无效（如管理员已重置 token）
+const blockMessage = ref(null)
 
 const token = computed(() => route.query.token || '')
 
@@ -137,14 +147,32 @@ async function loadRecords() {
   try {
     const list = await api.getRecords({ token: token.value, status: onlyPending.value ? 'pending' : undefined })
     records.value = list || []
-  } catch (_) {
+    blockMessage.value = null
+  } catch (e) {
     records.value = []
+    // 403：员工已被停用，旧二维码/链接打开后不允许查看与上传
+    // 401/404：token 无效（管理员已重置 token 或链接错误）
+    if (e?.code === 403) {
+      blockMessage.value = {
+        title: '链接已停用',
+        hint: '该员工二维码 / 链接已被管理员停用，无法查看或上传整改图。如有疑问请联系管理员。',
+      }
+    } else if (e?.code === 401 || e?.code === 404) {
+      blockMessage.value = {
+        title: '链接已失效',
+        hint: '该二维码 / 链接不存在或已被刷新，请联系管理员获取最新链接。',
+      }
+    }
   } finally {
     loading.value = false
   }
 }
 
 async function uploadFix(recordId, file) {
+  if (blockMessage.value) {
+    ElMessage.error(blockMessage.value.title)
+    return false
+  }
   uploadingId.value = recordId
   try {
     const res = await api.uploadImage(file, token.value)
@@ -155,8 +183,19 @@ async function uploadFix(recordId, file) {
       records.value[idx] = { ...records.value[idx], fix_image: res.path, status: 'completed' }
     }
     ElMessage.success('整改已提交')
-  } catch (_) {
-    ElMessage.error('上传失败')
+  } catch (e) {
+    if (e?.code === 403) {
+      blockMessage.value = {
+        title: '链接已停用',
+        hint: '该员工二维码 / 链接已被管理员停用，无法查看或上传整改图。如有疑问请联系管理员。',
+      }
+    } else if (e?.code === 401 || e?.code === 404) {
+      blockMessage.value = {
+        title: '链接已失效',
+        hint: '该二维码 / 链接不存在或已被刷新，请联系管理员获取最新链接。',
+      }
+    }
+    ElMessage.error(blockMessage.value?.title || '上传失败')
   } finally {
     uploadingId.value = null
   }

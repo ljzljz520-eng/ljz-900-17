@@ -32,6 +32,16 @@
               <el-tag v-if="u.is_active" type="success" size="small">启用</el-tag>
               <el-tag v-else type="info" size="small">已禁用</el-tag>
             </div>
+            <div class="employee-stats">
+              <span class="stat-chip">
+                <el-icon><DocumentChecked /></el-icon>
+                检查数量：<b>{{ u.check_count ?? 0 }}</b>
+              </span>
+              <span class="stat-chip done">
+                <el-icon><CircleCheck /></el-icon>
+                整改数量：<b>{{ u.fix_count ?? 0 }}</b>
+              </span>
+            </div>
           </div>
         </div>
         <div class="employee-actions">
@@ -63,7 +73,10 @@
           </div>
           <div v-if="u.qr_code_url" class="result-qr-row">
             <label>二维码：</label>
-            <img :src="imageUrl(u.qr_code_url)" alt="二维码" class="qr-thumb" />
+            <div class="qr-thumb-wrap" :class="{ disabled: !u.is_active }">
+              <img :src="imageUrl(u.qr_code_url)" alt="二维码" class="qr-thumb" />
+              <span v-if="!u.is_active" class="qr-disabled-mask">已停用 · 无法上传</span>
+            </div>
           </div>
         </div>
       </div>
@@ -86,7 +99,7 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { User, PictureFilled, Plus, Edit, SwitchButton, Refresh } from '@element-plus/icons-vue'
+import { User, PictureFilled, Plus, Edit, SwitchButton, Refresh, DocumentChecked, CircleCheck } from '@element-plus/icons-vue'
 import { api, apiBase } from '@/api/request'
 
 const loading = ref(false)
@@ -167,11 +180,17 @@ async function generateQr(u) {
 
 async function toggleActive(u) {
   try {
-    await ElMessageBox.confirm(`确定要${u.is_active ? '禁用' : '启用'}该员工吗？`, '确认操作', {
-      confirmButtonText: '确定',
-      cancelButtonText: '取消',
-      type: 'warning',
-    })
+    await ElMessageBox.confirm(
+      u.is_active
+        ? `停用后，员工「${u.name}」打开旧二维码 / 链接将无法查看和上传整改图，确定停用？`
+        : `确定重新启用员工「${u.name}」吗？启用后现有二维码 / 链接可继续使用。`,
+      '确认操作',
+      {
+        confirmButtonText: u.is_active ? '停用链接' : '启用',
+        cancelButtonText: '取消',
+        type: 'warning',
+      }
+    )
     const updated = await api.toggleUserActive(u.id)
     u.is_active = updated?.is_active
     ElMessage.success('已更新状态')
@@ -354,6 +373,33 @@ export default {
   white-space: nowrap;
 }
 
+.employee-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.stat-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(14, 165, 233, 0.08);
+  color: #0369a1;
+  padding: 4px 12px;
+  border-radius: 999px;
+  font-size: 13px;
+}
+
+.stat-chip b {
+  font-weight: 700;
+}
+
+.stat-chip.done {
+  background: rgba(16, 185, 129, 0.1);
+  color: #047857;
+}
+
 .employee-actions {
   margin-bottom: 16px;
 }
@@ -374,12 +420,40 @@ export default {
   max-width: 100%;
 }
 
-.result-qr-row img.qr-thumb {
+.qr-thumb-wrap {
+  position: relative;
+  display: inline-block;
   width: 140px;
   height: 140px;
   border-radius: 12px;
+  overflow: hidden;
   border: 1px solid #e2e8f0;
-  object-fit: contain;
   background: white;
+}
+
+.qr-thumb-wrap img.qr-thumb {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+}
+
+.qr-thumb-wrap.disabled img.qr-thumb {
+  filter: grayscale(1) blur(1px);
+  opacity: 0.45;
+}
+
+.qr-disabled-mask {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(15, 23, 42, 0.55);
+  color: white;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 8px;
+  text-align: center;
 }
 </style>
