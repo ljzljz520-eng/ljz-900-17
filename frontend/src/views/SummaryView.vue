@@ -6,6 +6,27 @@
     </header>
 
     <section v-loading="loading" class="summary-section">
+      <div class="summary-filter">
+        <span class="filter-label">按员工筛选：</span>
+        <el-select
+          v-model="selectedUserId"
+          placeholder="全部员工"
+          clearable
+          filterable
+          class="filter-select"
+          @change="loadSummary"
+        >
+          <el-option label="全部员工" :value="''" />
+          <el-option
+            v-for="u in users"
+            :key="u.id"
+            :label="`${u.name}（ID: ${u.id}）`"
+            :value="u.id"
+          />
+        </el-select>
+        <el-button text type="primary" @click="selectAll">查看全部</el-button>
+      </div>
+
       <div v-if="summary.length === 0 && !loading" class="empty-state">
         <div class="empty-icon">
           <el-icon><DataAnalysis /></el-icon>
@@ -18,7 +39,14 @@
         <div class="summary-header">
           <div class="summary-user">
             <div class="user-avatar">{{ (item.user?.name || '员')[0] }}</div>
-            <h2 class="summary-name">{{ item.user?.name }}</h2>
+            <div class="summary-user-meta">
+              <h2 class="summary-name">{{ item.user?.name }}</h2>
+              <div class="summary-user-sub">
+                <span class="summary-user-id">ID: {{ item.user?.id }}</span>
+                <el-tag v-if="item.user?.is_active" type="success" size="small">启用中</el-tag>
+                <el-tag v-else type="danger" size="small">已停用</el-tag>
+              </div>
+            </div>
           </div>
           <div class="summary-stats">
             <div class="stat">
@@ -86,6 +114,9 @@ import { api, apiBase } from '@/api/request'
 
 const loading = ref(true)
 const summary = ref([])
+const users = ref([])
+// 按员工筛选，'' 表示全部员工
+const selectedUserId = ref('')
 
 function imageUrl(path) {
   if (!path) return ''
@@ -96,7 +127,8 @@ function imageUrl(path) {
 async function loadSummary() {
   loading.value = true
   try {
-    summary.value = await api.getSummary()
+    const params = selectedUserId.value === '' ? {} : { user_id: selectedUserId.value }
+    summary.value = await api.getSummary(params)
   } catch (_) {
     summary.value = []
   } finally {
@@ -104,7 +136,19 @@ async function loadSummary() {
   }
 }
 
-onMounted(loadSummary)
+function selectAll() {
+  selectedUserId.value = ''
+  loadSummary()
+}
+
+onMounted(async () => {
+  try {
+    users.value = await api.getUsers()
+  } catch (_) {
+    users.value = []
+  }
+  await loadSummary()
+})
 </script>
 
 <style scoped>
@@ -135,6 +179,29 @@ onMounted(loadSummary)
   display: flex;
   flex-direction: column;
   gap: 24px;
+}
+
+.summary-filter {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: white;
+  border-radius: 12px;
+  padding: 12px 16px;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.04);
+}
+
+.filter-label {
+  font-size: 14px;
+  font-weight: 600;
+  color: #475569;
+  white-space: nowrap;
+}
+
+.filter-select {
+  width: 260px;
+  max-width: 60vw;
 }
 
 .empty-state {
@@ -214,6 +281,24 @@ onMounted(loadSummary)
   font-weight: 600;
   color: #1e293b;
   margin: 0;
+}
+
+.summary-user-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.summary-user-sub {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.summary-user-id {
+  font-size: 12px;
+  color: #94a3b8;
+  font-weight: 600;
 }
 
 .summary-stats {

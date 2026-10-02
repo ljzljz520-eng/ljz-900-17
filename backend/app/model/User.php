@@ -7,6 +7,12 @@ class User extends Model
     protected $table = 'users';
     /** 关闭自动时间戳，表结构无 update_time */
     protected $autoWriteTimestamp = false;
+    /** 敏感字段不随接口返回（员工端可凭 token 访问 /api/records） */
+    protected $hidden = [
+        'password_hash',
+        'auth_token',
+        'auth_token_expires',
+    ];
     protected $schema = [
         'id'                 => 'int',
         'name'               => 'string',

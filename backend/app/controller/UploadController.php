@@ -39,7 +39,7 @@ class UploadController
                     ->find();
                 if ($authedUser) {
                     if (isset($authedUser->is_active) && (int) $authedUser->is_active !== 1) {
-                        return api_json(['code' => 403, 'message' => '账号已禁用', 'data' => null], 200);
+                        return api_json(['code' => 403, 'message' => '链接已停用，请联系管理员', 'data' => null], 200);
                     }
                     $scope = 'employee';
                 }

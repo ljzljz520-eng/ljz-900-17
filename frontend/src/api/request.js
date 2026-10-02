@@ -40,8 +40,10 @@ request.interceptors.response.use(
         }
         return Promise.reject(new Error(d.message || '未登录'))
       }
-      ElMessage.error(d.message || '请求失败')
-      return Promise.reject(new Error(d.message || '请求失败'))
+      if (!res.config?.silent) ElMessage.error(d.message || '请求失败')
+      const err = new Error(d.message || '请求失败')
+      err.code = d.code
+      return Promise.reject(err)
     }
     return res
   },
@@ -56,7 +58,8 @@ request.interceptors.response.use(
       }
     }
     const msg = err.response?.data?.message || err.message || '网络错误'
-    ElMessage.error(msg)
+    if (!err.config?.silent) ElMessage.error(msg)
+    err.code = code
     return Promise.reject(err)
   }
 )
@@ -72,22 +75,22 @@ export const api = {
   resetUserToken: (id) => request.post(`/api/users/${id}/reset-token`).then((r) => r.data?.data),
   toggleUserActive: (id) => request.post(`/api/users/${id}/toggle-active`).then((r) => r.data?.data),
   getInspectionItems: () => request.get('/api/inspection-items').then((r) => r.data?.data ?? []),
-  getRecords: (params) => request.get('/api/records', { params }).then((r) => r.data?.data ?? []),
+  getRecords: (params, opts = {}) => request.get('/api/records', { params, ...opts }).then((r) => r.data?.data ?? []),
   // 兼容两种返回：
   // 1) 旧：data = records[]
   // 2) 新：data = { records: records[], link, qr_code_url }
   createRecords: (data) => request.post('/api/records', data).then((r) => r.data?.data ?? []),
   deleteRecord: (id) => request.delete(`/api/records/${id}`).then((r) => r.data),
   uploadFix: (id, fixImage, token) =>
-    request.put(`/api/records/${id}/fix`, { fix_image: fixImage, token }).then((r) => r.data?.data),
+    request.put(`/api/records/${id}/fix`, { fix_image: fixImage, token }, { silent: true }).then((r) => r.data?.data),
   uploadImage: (file, token) => {
     const form = new FormData()
     form.append('file', file)
     if (token) form.append('token', token)
-    return request.post('/api/upload/image', form).then((r) => r.data?.data)
+    return request.post('/api/upload/image', form, { silent: true }).then((r) => r.data?.data)
   },
   generateQr: (userId, baseUrl) => request.post('/api/qr/generate', { user_id: userId, base_url: baseUrl }).then((r) => r.data?.data),
-  getSummary: () => request.get('/api/summary').then((r) => r.data?.data ?? []),
+  getSummary: (params) => request.get('/api/summary', { params }).then((r) => r.data?.data ?? []),
 }
 
 export function apiBase() {

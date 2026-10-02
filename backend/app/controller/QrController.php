@@ -20,6 +20,12 @@ class QrController
             if (!$user) {
                 return api_json(['code' => 404, 'message' => '用户不存在', 'data' => null]);
             }
+            if ($user->role !== 'employee') {
+                return api_json(['code' => 400, 'message' => '仅支持为员工生成二维码', 'data' => null]);
+            }
+            if (isset($user->is_active) && (int) $user->is_active !== 1) {
+                return api_json(['code' => 400, 'message' => '链接已停用，请先启用后再生成二维码', 'data' => null]);
+            }
             $data = (new QrService())->generateForUser($user, $baseUrl);
             return api_json([
                 'code' => 0,

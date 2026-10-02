@@ -4,15 +4,22 @@ namespace app\controller;
 use app\model\Record;
 use app\model\User;
 use think\facade\Log;
+use think\facade\Request;
 use think\Response;
 class SummaryController
 {
     public function index(): Response
     {
         try {
-            $users = User::where('role', 'employee')->with(['records' => function ($q) {
+            $query = User::where('role', 'employee');
+            // 老板可按员工筛选汇总
+            $userId = Request::param('user_id');
+            if ($userId !== null && $userId !== '') {
+                $query->where('id', (int) $userId);
+            }
+            $users = $query->with(['records' => function ($q) {
                 $q->with('item')->order('sequence_key', 'asc');
-            }])->select();
+            }])->order('id', 'asc')->select();
             $data = [];
             foreach ($users as $user) {
                 $records = $user->records;

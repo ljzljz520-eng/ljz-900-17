@@ -2,7 +2,7 @@
   <div class="employees-page">
     <header class="page-header">
       <h1 class="page-title">员工管理</h1>
-      <p class="page-desc">查看员工 ID、token、整改链接与二维码，扫码或打开链接可上传整改图</p>
+      <p class="page-desc">管理员工 ID、姓名、token 与二维码，可查看检查/整改数量，并停用或重新启用链接</p>
     </header>
 
     <section v-loading="loading" class="employees-section">
@@ -21,7 +21,7 @@
         <p class="empty-hint">请先在数据库中添加员工</p>
       </div>
 
-      <div v-for="u in users" :key="u.id" class="employee-card">
+      <div v-for="u in users" :key="u.id" class="employee-card" :class="{ 'is-disabled': !u.is_active }">
         <div class="employee-header">
           <div class="employee-avatar">{{ (u.name || '员')[0] }}</div>
           <div class="employee-info">
@@ -29,25 +29,40 @@
             <div class="employee-ids">
               <span class="id-badge">ID: {{ u.id }}</span>
               <span class="token-badge" :title="u.token">token: {{ u.token }}</span>
-              <el-tag v-if="u.is_active" type="success" size="small">启用</el-tag>
-              <el-tag v-else type="info" size="small">已禁用</el-tag>
+              <el-tag v-if="u.is_active" type="success" size="small">启用中</el-tag>
+              <el-tag v-else type="danger" size="small">已停用</el-tag>
+            </div>
+          </div>
+          <div class="employee-counts">
+            <div class="count-item">
+              <span class="count-value">{{ u.check_count ?? 0 }}</span>
+              <span class="count-label">检查数量</span>
+            </div>
+            <div class="count-divider"></div>
+            <div class="count-item">
+              <span class="count-value success">{{ u.fix_count ?? 0 }}</span>
+              <span class="count-label">整改数量</span>
             </div>
           </div>
         </div>
+        <div v-if="!u.is_active" class="disabled-banner">
+          <el-icon><CircleClose /></el-icon>
+          <span>链接已停用：员工通过旧二维码或链接将无法查看记录与上传整改图</span>
+        </div>
         <div class="employee-actions">
-          <el-button type="primary" size="default" @click="generateQr(u)">
+          <el-button type="primary" size="default" :disabled="!u.is_active" @click="generateQr(u)">
             <el-icon><PictureFilled /></el-icon>
-            生成/刷新二维码
+            重新生成二维码
           </el-button>
           <el-button size="default" @click="openEdit(u)">
             <el-icon><Edit /></el-icon>
             编辑
           </el-button>
-          <el-button :type="u.is_active ? 'warning' : 'success'" plain size="default" @click="toggleActive(u)">
+          <el-button :type="u.is_active ? 'danger' : 'success'" plain size="default" @click="toggleActive(u)">
             <el-icon><SwitchButton /></el-icon>
-            {{ u.is_active ? '禁用' : '启用' }}
+            {{ u.is_active ? '停用链接' : '启用链接' }}
           </el-button>
-          <el-button type="danger" plain size="default" @click="resetToken(u)">
+          <el-button type="warning" plain size="default" @click="resetToken(u)">
             <el-icon><Refresh /></el-icon>
             重置 token
           </el-button>
@@ -63,7 +78,7 @@
           </div>
           <div v-if="u.qr_code_url" class="result-qr-row">
             <label>二维码：</label>
-            <img :src="imageUrl(u.qr_code_url)" alt="二维码" class="qr-thumb" />
+            <img :src="imageUrl(u.qr_code_url)" alt="二维码" class="qr-thumb" :class="{ 'qr-disabled': !u.is_active }" />
           </div>
         </div>
       </div>
@@ -86,7 +101,7 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { User, PictureFilled, Plus, Edit, SwitchButton, Refresh } from '@element-plus/icons-vue'
+import { User, PictureFilled, Plus, Edit, SwitchButton, Refresh, CircleClose } from '@element-plus/icons-vue'
 import { api, apiBase } from '@/api/request'
 
 const loading = ref(false)
@@ -166,15 +181,22 @@ async function generateQr(u) {
 }
 
 async function toggleActive(u) {
+  const stopping = !!u.is_active
   try {
-    await ElMessageBox.confirm(`确定要${u.is_active ? '禁用' : '启用'}该员工吗？`, '确认操作', {
-      confirmButtonText: '确定',
-      cancelButtonText: '取消',
-      type: 'warning',
-    })
+    await ElMessageBox.confirm(
+      stopping
+        ? '停用后，员工通过旧二维码或链接将无法查看记录与上传整改图，确定停用该链接？'
+        : '启用后员工可继续通过链接或二维码上传整改图，确定启用？',
+      stopping ? '确认停用链接' : '确认启用',
+      {
+        confirmButtonText: '确定',
+        cancelButtonText: '取消',
+        type: 'warning',
+      }
+    )
     const updated = await api.toggleUserActive(u.id)
     u.is_active = updated?.is_active
-    ElMessage.success('已更新状态')
+    ElMessage.success(stopping ? '链接已停用' : '链接已启用')
   } catch (e) {
     if (e !== 'cancel') ElMessage.error('操作失败')
   }
@@ -295,11 +317,75 @@ export default {
   border: 1px solid rgba(0, 0, 0, 0.04);
 }
 
+.employee-card.is-disabled {
+  background: #fafafa;
+  border-color: rgba(239, 68, 68, 0.25);
+}
+
 .employee-header {
   display: flex;
   align-items: center;
   gap: 16px;
   margin-bottom: 16px;
+}
+
+.employee-counts {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 10px 18px;
+}
+
+.count-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 64px;
+}
+
+.count-value {
+  font-size: 22px;
+  font-weight: 700;
+  color: #0f172a;
+  line-height: 1.2;
+}
+
+.count-value.success {
+  color: #10b981;
+}
+
+.count-label {
+  font-size: 12px;
+  color: #94a3b8;
+  margin-top: 2px;
+}
+
+.count-divider {
+  width: 1px;
+  height: 32px;
+  background: #e2e8f0;
+}
+
+.disabled-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(239, 68, 68, 0.08);
+  border: 1px solid rgba(239, 68, 68, 0.25);
+  color: #dc2626;
+  font-size: 13px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  margin-bottom: 16px;
+}
+
+.disabled-banner .el-icon {
+  flex-shrink: 0;
+  font-size: 16px;
 }
 
 .employee-avatar {
@@ -381,5 +467,22 @@ export default {
   border: 1px solid #e2e8f0;
   object-fit: contain;
   background: white;
+}
+
+.result-qr-row img.qr-disabled {
+  filter: grayscale(1);
+  opacity: 0.45;
+}
+
+@media (max-width: 640px) {
+  .employee-header {
+    flex-wrap: wrap;
+  }
+
+  .employee-counts {
+    margin-left: 0;
+    width: 100%;
+    justify-content: center;
+  }
 }
 </style>
