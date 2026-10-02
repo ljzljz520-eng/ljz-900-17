@@ -2,8 +2,30 @@
   <div class="summary-page">
     <header class="page-header">
       <h1 class="page-title">汇总看板</h1>
-      <p class="page-desc">问题图与整改图成对展示，按 #key 从小到大排序，同一徽章（检查项+分值）共用</p>
+      <p class="page-desc">问题图与整改图成对展示，按 #key 从小到大排序，同一徽章（检查项+分值）共用；可按员工筛选</p>
     </header>
+
+    <section class="filter-bar">
+      <el-select
+        v-model="selectedUserId"
+        placeholder="全部员工"
+        clearable
+        filterable
+        class="employee-filter"
+        @change="loadSummary"
+      >
+        <el-option
+          v-for="u in users"
+          :key="u.id"
+          :label="`${u.name}（ID: ${u.id}）`"
+          :value="u.id"
+        />
+      </el-select>
+      <el-button :icon="Refresh" @click="loadSummary">刷新</el-button>
+      <span v-if="selectedUserId" class="filter-tip">
+        仅显示「{{ selectedUser?.name || '该员工' }}」的汇总（检查 {{ summary[0]?.total ?? 0 }} / 整改 {{ summary[0]?.completed ?? 0 }}）
+      </span>
+    </section>
 
     <section v-loading="loading" class="summary-section">
       <div v-if="summary.length === 0 && !loading" class="empty-state">
@@ -80,12 +102,16 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
-import { CircleCheck, DataAnalysis } from '@element-plus/icons-vue'
+import { ref, computed, onMounted } from 'vue'
+import { CircleCheck, DataAnalysis, Refresh } from '@element-plus/icons-vue'
 import { api, apiBase } from '@/api/request'
 
 const loading = ref(true)
 const summary = ref([])
+const users = ref([])
+const selectedUserId = ref('')
+
+const selectedUser = computed(() => users.value.find((u) => u.id === selectedUserId.value))
 
 function imageUrl(path) {
   if (!path) return ''
@@ -93,10 +119,19 @@ function imageUrl(path) {
   return path.startsWith('http') ? path : (base.replace(/\/$/, '') + path)
 }
 
+async function loadUsers() {
+  try {
+    users.value = await api.getUsers()
+  } catch (_) {
+    users.value = []
+  }
+}
+
 async function loadSummary() {
   loading.value = true
   try {
-    summary.value = await api.getSummary()
+    const params = selectedUserId.value ? { user_id: selectedUserId.value } : {}
+    summary.value = await api.getSummary(params)
   } catch (_) {
     summary.value = []
   } finally {
@@ -104,7 +139,10 @@ async function loadSummary() {
   }
 }
 
-onMounted(loadSummary)
+onMounted(async () => {
+  await loadUsers()
+  await loadSummary()
+})
 </script>
 
 <style scoped>
@@ -129,6 +167,26 @@ onMounted(loadSummary)
   font-size: 15px;
   color: #64748b;
   margin: 0;
+}
+
+.filter-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 0 0 20px;
+  flex-wrap: wrap;
+}
+
+.employee-filter {
+  width: 260px;
+}
+
+.filter-tip {
+  font-size: 13px;
+  color: #0ea5e9;
+  background: rgba(14, 165, 233, 0.08);
+  padding: 6px 12px;
+  border-radius: 8px;
 }
 
 .summary-section {

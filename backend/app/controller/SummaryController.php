@@ -4,15 +4,26 @@ namespace app\controller;
 use app\model\Record;
 use app\model\User;
 use think\facade\Log;
+use think\facade\Request;
 use think\Response;
 class SummaryController
 {
     public function index(): Response
     {
         try {
-            $users = User::where('role', 'employee')->with(['records' => function ($q) {
+            $query = User::where('role', 'employee');
+            // 老板可按员工筛选汇总：?user_id=12 或 ?user_id=1,2
+            $userIdParam = trim((string) Request::param('user_id', ''));
+            if ($userIdParam !== '') {
+                $userIds = array_values(array_filter(array_map('intval', explode(',', $userIdParam))));
+                if (empty($userIds)) {
+                    return api_json(['code' => 0, 'message' => 'ok', 'data' => []]);
+                }
+                $query->whereIn('id', $userIds);
+            }
+            $users = $query->with(['records' => function ($q) {
                 $q->with('item')->order('sequence_key', 'asc');
-            }])->select();
+            }])->order('id', 'asc')->select();
             $data = [];
             foreach ($users as $user) {
                 $records = $user->records;
@@ -27,7 +38,12 @@ class SummaryController
                     $totalScore += (int) ($r->item_score_snapshot ?? ($r->item->score ?? 0));
                 }
                 $data[] = [
-                    'user' => $user,
+                    'user' => [
+                        'id' => (int) $user->id,
+                        'name' => (string) $user->name,
+                        'role' => (string) $user->role,
+                        'is_active' => (int) $user->is_active,
+                    ],
                     'records' => $records,
                     'total' => $total,
                     'completed' => $completed,

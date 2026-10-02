@@ -86,6 +86,9 @@ class RecordController
             if (!$user) {
                 return api_json(['code' => 404, 'message' => '用户不存在', 'data' => null]);
             }
+            if ($user->role === 'employee' && (int) $user->is_active !== 1) {
+                return api_json(['code' => 400, 'message' => '该员工链接已停用，无法新增检查', 'data' => null]);
+            }
             $checkDate = (string) Request::param('check_date') ?: date('Y-m-d');
             $startKey = $this->seq()->getNextSequenceKey($userId, $checkDate);
 
@@ -183,6 +186,10 @@ class RecordController
             $user = User::where('token', $token)->find();
             if (!$user) {
                 return api_json(['code' => 401, 'message' => '无效的 token', 'data' => null]);
+            }
+            // 链接已停用：员工即使打开旧二维码/链接也不能上传整改
+            if ((int) $user->is_active !== 1) {
+                return api_json(['code' => 403, 'message' => '链接已停用，无法上传整改', 'data' => null]);
             }
             if ((int) $record->user_id !== (int) $user->id) {
                 return api_json(['code' => 403, 'message' => '无权操作该记录', 'data' => null]);

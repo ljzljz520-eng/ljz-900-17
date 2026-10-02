@@ -15,7 +15,13 @@
         </div>
         <div class="filter-row">
           <el-select v-model="selectedUserId" placeholder="请选择员工" filterable class="employee-select">
-            <el-option v-for="u in users" :key="u.id" :label="u.name" :value="u.id" />
+            <el-option
+              v-for="u in users"
+              :key="u.id"
+              :label="u.is_active ? u.name : `${u.name}（已停用）`"
+              :value="u.id"
+              :disabled="!u.is_active"
+            />
           </el-select>
           <el-date-picker
             v-model="selectedDate"

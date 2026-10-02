@@ -87,7 +87,7 @@ export const api = {
     return request.post('/api/upload/image', form).then((r) => r.data?.data)
   },
   generateQr: (userId, baseUrl) => request.post('/api/qr/generate', { user_id: userId, base_url: baseUrl }).then((r) => r.data?.data),
-  getSummary: () => request.get('/api/summary').then((r) => r.data?.data ?? []),
+  getSummary: (params) => request.get('/api/summary', { params }).then((r) => r.data?.data ?? []),
 }
 
 export function apiBase() {

@@ -7,6 +7,8 @@ class User extends Model
     protected $table = 'users';
     /** 关闭自动时间戳，表结构无 update_time */
     protected $autoWriteTimestamp = false;
+    /** 序列化到前端时隐藏敏感字段 */
+    protected $hidden = ['password_hash', 'auth_token', 'auth_token_expires'];
     protected $schema = [
         'id'                 => 'int',
         'name'               => 'string',

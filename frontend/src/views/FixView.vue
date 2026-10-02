@@ -30,7 +30,7 @@
       </header>
 
       <section v-loading="loading" class="fix-content">
-        <div v-if="token" class="fix-toolbar">
+        <div v-if="token && !forbidden && !loadError" class="fix-toolbar">
           <el-switch v-model="onlyPending" active-text="仅看待整改" inactive-text="显示全部" />
         </div>
 
@@ -40,6 +40,22 @@
           </div>
           <p class="fix-empty-text">缺少 token</p>
           <p class="fix-empty-hint">无法加载整改列表，请使用管理员提供的链接或扫码进入</p>
+        </div>
+
+        <div v-else-if="forbidden" class="fix-empty">
+          <div class="fix-empty-icon">
+            <el-icon><CircleClose /></el-icon>
+          </div>
+          <p class="fix-empty-text">链接不可用</p>
+          <p class="fix-empty-hint">该二维码/链接已被停用或失效，无法查看记录或上传整改图，请联系管理员获取新链接</p>
+        </div>
+
+        <div v-else-if="loadError" class="fix-empty">
+          <div class="fix-empty-icon">
+            <el-icon><WarningFilled /></el-icon>
+          </div>
+          <p class="fix-empty-text">加载失败</p>
+          <p class="fix-empty-hint">请稍后重试，或联系管理员确认链接是否有效</p>
         </div>
 
         <div v-else-if="records.length === 0 && !loading" class="fix-empty">
@@ -110,8 +126,7 @@
 <script setup>
 import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
-import { ElMessage } from 'element-plus'
-import { CircleCheck, Loading, Link } from '@element-plus/icons-vue'
+import { CircleCheck, CircleClose, WarningFilled, Loading, Link } from '@element-plus/icons-vue'
 import { api, apiBase } from '@/api/request'
 
 const route = useRoute()
@@ -119,6 +134,8 @@ const loading = ref(true)
 const uploadingId = ref(null)
 const records = ref([])
 const onlyPending = ref(false)
+const forbidden = ref(false)
+const loadError = ref(false)
 
 const token = computed(() => route.query.token || '')
 
@@ -134,11 +151,19 @@ async function loadRecords() {
     return
   }
   loading.value = true
+  forbidden.value = false
+  loadError.value = false
   try {
     const list = await api.getRecords({ token: token.value, status: onlyPending.value ? 'pending' : undefined })
     records.value = list || []
-  } catch (_) {
+  } catch (e) {
     records.value = []
+    const status = e?.response?.data?.code
+    if (status === 403 || status === 404) {
+      forbidden.value = true
+    } else {
+      loadError.value = true
+    }
   } finally {
     loading.value = false
   }
@@ -155,8 +180,12 @@ async function uploadFix(recordId, file) {
       records.value[idx] = { ...records.value[idx], fix_image: res.path, status: 'completed' }
     }
     ElMessage.success('整改已提交')
-  } catch (_) {
-    ElMessage.error('上传失败')
+  } catch (e) {
+    const status = e?.response?.data?.code
+    if (status === 403 || status === 404) {
+      // 链接失效/停用：切换到停用提示页（错误提示已由请求拦截器统一弹出）
+      forbidden.value = true
+    }
   } finally {
     uploadingId.value = null
   }
